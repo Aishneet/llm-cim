@@ -23,9 +23,6 @@ CONTEXT_LENGTH = 4096
 # =========================
 
 
-#####################################
-# Chapter 3
-#####################################
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
@@ -112,9 +109,6 @@ class MultiHeadAttention(nn.Module):
         self.ptr_current_pos = 0
 
 
-#####################################
-# Chapter 4
-#####################################
 class LayerNorm(nn.Module):
     def __init__(self, emb_dim):
         super().__init__()
@@ -291,14 +285,12 @@ def load_weights_from_hf(custom_model, name):
     hf_state_dict = hf_model.state_dict()
     custom_state_dict = custom_model.state_dict()
 
-    # embeddings + final LN only, since QKV/FF/out head are removed in this no-GEMV model
     mapping = {
         "tok_emb.weight": "transformer.wte.weight",
         "final_norm.scale": "transformer.ln_f.weight",
         "final_norm.shift": "transformer.ln_f.bias",
     }
 
-    # extend positional embeddings from 1024 -> 2048
     hf_pos = hf_state_dict["transformer.wpe.weight"]
     custom_pos = custom_state_dict["pos_emb.weight"]
     custom_pos[:hf_pos.shape[0]] = hf_pos
@@ -308,7 +300,6 @@ def load_weights_from_hf(custom_model, name):
         )
     custom_state_dict["pos_emb.weight"] = custom_pos
 
-    # layer norms per block
     for i in range(len(custom_model.trf_blocks)):
         custom_base = f"trf_blocks.{i}"
         hf_base = f"transformer.h.{i}"
@@ -385,7 +376,7 @@ def export_decoding_mlir(model, tokenizer, export_path, device="cpu"):
 
     decoding_input = torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    prefill_len = model.pos_emb.num_embeddings - 1   # 2047 when context_length=2048
+    prefill_len = model.pos_emb.num_embeddings - 1  
     print("kv cache size:", prefill_len)
     prefill_input = torch.zeros((1, prefill_len), dtype=torch.long, device=device)
 

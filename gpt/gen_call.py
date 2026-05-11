@@ -26,7 +26,6 @@ with open("call_args.inc", "w", encoding="utf-8") as ca, open("ptr_buffers.inc",
         comma = "," if i != len(types) - 1 else ""
 
         if ty == "ptr":
-            # USED 的指针给大 buffer，UNUSED 给小 buffer
             sz = "16 * 1024 * 1024" if used_flags[i] else "4096"
             pb.write(f"  void *ptrbuf{ptr_id} = aligned_alloc_or_die(64, {sz});\n")
             ca.write(f"      ptrbuf{ptr_id}{comma}\n")

@@ -211,10 +211,6 @@ class GPTModel(nn.Module):
         self.current_pos = 0
 
 
-# =========================
-# Generation helpers
-# =========================
-
 def generate_text_simple_cached(model, idx, max_new_tokens, context_size=None, use_cache=True):
     model.eval()
     ctx_len = context_size or model.pos_emb.num_embeddings
@@ -236,10 +232,6 @@ def generate_text_simple_cached(model, idx, max_new_tokens, context_size=None, u
 
     return idx
 
-
-# =========================
-# Build model
-# =========================
 
 def get(context_length=4096):
     GPT_CONFIG_124M = {
@@ -304,10 +296,6 @@ def get(context_length=4096):
     return model, tokenizer
 
 
-# =========================
-# Export to MLIR
-# =========================
-
 def export_decoding_mlir(model, tokenizer, export_path, device="cpu"):
     model = model.to(device).eval()
 
@@ -321,11 +309,7 @@ def export_decoding_mlir(model, tokenizer, export_path, device="cpu"):
             return logits
 
     wrapper = DecodingWrapper(model)
-
-    # Single-token decoding input
     decoding_input = torch.zeros((1, 1), dtype=torch.long, device=device)
-
-    # Warm up KV cache to make the cache path active
     prefill_len = model.pos_emb.num_embeddings - 1
     print("kv cache size:", prefill_len)
     prefill_input = torch.zeros((1, prefill_len), dtype=torch.long, device=device)
@@ -355,10 +339,6 @@ def export_decoding_mlir(model, tokenizer, export_path, device="cpu"):
         print(f"Export failed! Error: {e}")
         print("If this fails on torch.cat or cache handling, try exporting a non-cached path first.")
 
-
-# =========================
-# Main
-# =========================
 
 if __name__ == "__main__":
     DEVICE = "cpu"

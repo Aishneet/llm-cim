@@ -24,9 +24,6 @@ CONTEXT_LENGTH = 4096
 # =========================
 
 
-#####################################
-# Model components
-#####################################
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
@@ -236,9 +233,6 @@ class GPTModel(nn.Module):
         self.current_pos = 0
 
 
-#####################################
-# Generation helpers
-#####################################
 def generate_text_simple(model, idx, max_new_tokens, context_size):
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_size:]
@@ -272,9 +266,6 @@ def generate_text_simple_cached(model, idx, max_new_tokens, context_size=None, u
     return idx
 
 
-#####################################
-# HF config / weight loading
-#####################################
 def get_config_from_hf(name, layer, context_length=4096):
     config = GPT2Config.from_pretrained(name)
 
@@ -302,9 +293,9 @@ def load_weights_from_hf(custom_model, name):
         "out_head.weight": "lm_head.weight",
     }
 
-    # Extend positional embeddings from HF's 1024 to our target context length
-    hf_pos = hf_state_dict["transformer.wpe.weight"]          # [1024, emb_dim]
-    custom_pos = custom_state_dict["pos_emb.weight"]          # [context_length, emb_dim]
+   
+    hf_pos = hf_state_dict["transformer.wpe.weight"]         
+    custom_pos = custom_state_dict["pos_emb.weight"]         
     custom_pos[:hf_pos.shape[0]] = hf_pos
     if custom_pos.shape[0] > hf_pos.shape[0]:
         custom_pos[hf_pos.shape[0]:] = hf_pos[-1].unsqueeze(0).repeat(
@@ -356,9 +347,6 @@ def build_reduced_model(name, layer, context_length=4096):
     return tokenizer, model
 
 
-#####################################
-# Export helpers
-#####################################
 def export_to_pt(model, tokenizer, export_path, device="cpu"):
     model = model.to(device).eval()
 
@@ -440,9 +428,6 @@ def export_decoding_mlir(model, tokenizer, export_path, device="cpu"):
         print("If torch.cat causes issues, try exporting with output_type='torch' first.")
 
 
-#####################################
-# Main
-#####################################
 def main():
     torch.manual_seed(123)
     tokenizer, reduced_model = build_reduced_model(

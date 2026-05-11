@@ -23,9 +23,6 @@ CONTEXT_LENGTH = 4096
 # =========================
 
 
-#####################################
-# Chapter 3
-#####################################
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
@@ -111,9 +108,7 @@ class MultiHeadAttention(nn.Module):
         self.ptr_current_pos = 0
 
 
-#####################################
-# Chapter 4
-#####################################
+
 class LayerNorm(nn.Module):
     def __init__(self, emb_dim):
         super().__init__()

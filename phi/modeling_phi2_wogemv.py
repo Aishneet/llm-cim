@@ -507,14 +507,10 @@ __all__ = [
 
 def load_weight(model,name,layer_idx=0):
     print(f"Loading weights from Hugging Face: {name}...")
-    
-    # 下载模型（优先下载 safetensors）
     model_dir = snapshot_download(repo_id=name, allow_patterns=["*.safetensors", "*.bin", "*.json"]) # this make sure that getting the right hf weights
     
     target_state_dict = model.state_dict()
     new_state_dict = {}
-    
-    # 查找权重文件
     weight_files = [f for f in os.listdir(model_dir) if f.endswith(('.safetensors', '.bin'))]
     
     for weight_file in weight_files:
@@ -525,14 +521,11 @@ def load_weight(model,name,layer_idx=0):
             shard_dict = torch.load(file_path, map_location="cpu", weights_only=True)
             
         for key, value in shard_dict.items():
-            # 移除 'model.' 前缀以匹配 PhiModel 结构
             clean_key = key.replace("model.", "")
             
-            # 1. 加载全局参数 (Embedding, Norm)
             if clean_key in target_state_dict and "layers" not in clean_key:
                 new_state_dict[clean_key] = value
             
-            # 2. 加载指定的 Transformer 层到本地的 layers.0
             elif f"layers.{layer_idx}." in clean_key:
                 mapped_key = clean_key.replace(f"layers.{layer_idx}.", "layers.0.")
                 if mapped_key in target_state_dict:
@@ -546,16 +539,12 @@ def load_weight(model,name,layer_idx=0):
 
 
 def build_reduced_model(name):
-    """一键构建函数"""
-    config = PhiConfig() # phi1 and phi1.5 share the config so this is fine 
+    config = PhiConfig() 
     config.num_hidden_layers = 1
-    # config.attn_implementation="eager"
-    # for phi2
-    config.hidden_size = 2560            # 从 2048 增加到 2560
-    config.intermediate_size = 10240    # 从 8192 增加到 10240 (4倍于 hidden_size)
-    # config.num_hidden_layers = 32       # 从 24 层增加到 32 层
-    config.num_attention_heads = 32     # 保持 32，但此时 head_dim = 2560/32 = 80
-    config.resid_pdrop = 0.0           # 默认通常微调为 0.1 以适应更
+    config.hidden_size = 2560            
+    config.intermediate_size = 10240    
+    config.num_attention_heads = 32    
+    config.resid_pdrop = 0.0          
     config.embd_pdrop = 0.0
     config.rope_parameters = {"rope_type": "default", "rope_theta": 10000.0, "partial_rotary_factor": 0.4}
     
@@ -572,95 +561,46 @@ def build_reduced_model(name):
 
 
 def export_decoding_mlir(model, config, export_path, device="cpu"):
-    # 确保模型在正确的设备和模式
     model = model.to(device).eval()
     
-    # 关键点 1：定义符合原模型 forward 签名的 Wrapper
     class DecodingWrapper(torch.nn.Module):
         def __init__(self, m, cfg):
             super().__init__()
             self.m = m
             self.cfg = cfg
-            self.max_seq_len = 1024 # 强制 context_length
+            self.max_seq_len = 1024 
             self.prefill_len = self.max_seq_len -1
 
-            # Phi-1 参数：batch=1, heads, seq_len=1 (只存过去的), head_dim
             num_heads = cfg.num_attention_heads
             head_dim = cfg.hidden_size // num_heads
             
-            # 初始化一个伪造的 past_key_value (假设过去已经处理了 0 个 token)
-            # 形状: (batch, num_heads, past_seq_len, head_dim)
             self.register_buffer("past_k", torch.zeros(1, num_heads, self.prefill_len, head_dim))
             self.register_buffer("past_v", torch.zeros(1, num_heads, self.prefill_len, head_dim))
         class _SimpleCache:
-            """
-            轻量 Cache，提供 transformers PhiModel 期望的接口：
-            - get_seq_length() -> int
-            - get_mask_sizes(q_length, layer_idx) -> (kv_length, kv_offset)
-            - update(key_states, value_states, layer_idx=None) -> (key_concat, value_concat)
-            语义：
-            - 过去长度 P = past_k.shape[2]
-            - 当前 query 长度 q_length = key_states.shape[2]
-            - 返回 kv_length = P + q_length, kv_offset = P
-            """
             def __init__(self, past_k, past_v):
-                # 保留引用（buffer）以便 update 时修改状态
                 self.past_k = past_k
                 self.past_v = past_v
 
             def get_seq_length(self):
-                # 过去缓存的 token 数
                 return int(self.past_k.shape[2])
 
             def get_mask_sizes(self, q_length: int, layer_idx: int | None = None):
-                """
-                返回 (kv_length, kv_offset)
-                kv_length = past_seq_len + q_length
-                kv_offset = past_seq_len (也就是当前 query 在整体 kv 上的起始偏移)
-                """
                 past_len = self.get_seq_length()
                 kv_length = past_len + int(q_length)
                 kv_offset = past_len
                 return kv_length, kv_offset
 
             def update(self, key_states, value_states, layer_idx=None):
-                """
-                key_states/value_states: [batch, num_heads, seq_len, head_dim] (当前 step)
-                将新的 key/value 拼接到 past 上，并返回拼接后的 (key, value)，即
-                [batch, num_heads, past_seq_len + seq_len, head_dim]
-                """
-                # 确保 device/dtype 一致
                 if self.past_k.device != key_states.device:
                     self.past_k = self.past_k.to(key_states.device)
                     self.past_v = self.past_v.to(value_states.device)
 
-                # 拼接
                 self.past_k = torch.cat((self.past_k, key_states), dim=2)
                 self.past_v = torch.cat((self.past_v, value_states), dim=2)
-
-                # 返回给调用方：作为“当前可用”的 key/value（被 attention 直接使用）
                 return self.past_k, self.past_v
             
         def forward(self, input_ids):
-            # # 注意：transformers 的 PhiModel 需要 past_key_values 或者是 Cache 对象
-            # # 这里我们手动构造元组形式，这会被内部转换为缓存
-            # past_key_values = ((self.past_k, self.past_v),)
-            
-            # # 这里的 position_ids 必须显式提供，否则导出时会自动生成arange导致形状不固定
-            # position_ids = torch.tensor([[0]], dtype=torch.long, device=input_ids.device)
-            
-            # outputs = self.m(
-            #     input_ids=input_ids,
-            #     past_key_values=past_key_values,
-            #     position_ids=position_ids,
-            #     use_cache=True,
-            #     return_dict=False # 导出时建议关闭 return_dict 以减少层级
-            # )
-            # 使用 SimpleCache 实例（而不是 tuple）
             past_cache = DecodingWrapper._SimpleCache(self.past_k, self.past_v)
-
-            # position_ids 必须显式提供以锁定形状
-            #position_ids = torch.tensor([[0]], dtype=torch.long, device=input_ids.device)
             position_ids = torch.tensor(
                 [[self.past_k.shape[2]]],
             )
@@ -671,32 +611,22 @@ def export_decoding_mlir(model, config, export_path, device="cpu"):
                 use_cache=True,
                 return_dict=False
             )
-            # outputs[0] 是 last_hidden_state
             return outputs[0]
 
     wrapper = DecodingWrapper(model,config)
 
-    # 关键点 2：构造符合 Decoding 阶段形状的输入 (1, 1)
-    # 假设我们只推理当前这一个 token
     decoding_input = torch.zeros((1, 1), dtype=torch.long, device=device) 
-
-    # 关键点 3：预热 (Warm-up)
-    # 这一步非常重要！因为原代码中 cache 开始是 None。
-    # 如果不运行这一步，FX 追踪到的 cache 分支可能是无效的。
     with torch.no_grad():
         
         _ = wrapper(decoding_input)
 
-    # 关键点 4：导出配置
     decomp_table = get_decomposition_table()
 
     print("Starting MLIR export for decoding step...")
     try:
-        # 使用 fx.export_and_import
         mlir_module = fx.export_and_import(
             wrapper, 
             decoding_input, 
-            # 如果你想支持动态长度，这里可以加 dynamic_shapes
             output_type="linalg-on-tensors", 
             strict=False,
             decomposition_table=decomp_table,
@@ -708,15 +638,12 @@ def export_decoding_mlir(model, config, export_path, device="cpu"):
         
     except Exception as e:
         print(f"Export failed! Error: {e}")
-        print("\n提示：如果报错涉及 'torch.cat'，是因为 linalg 对动态增长的 Tensor 支持较难。")
-        print("建议先尝试将 output_type 改为 'torch' 看看能否成功导出 Torch 方言的 MLIR。")
+        
     
 if __name__ == "__main__":
-    #config = OPTConfig()
     ALL_ATTENTION_FUNCTIONS.get_interface = lambda impl, default: eager_attention_forward
 
     reduced_model, config= build_reduced_model("microsoft/phi-2")
     
-    #export_to_pt(reduced_model, tokenizer, EXPORT_Prefill_PATH, device=DEVICE)
     EXPORT_Decode_PATH = "phi2Decoding_wogemv.mlir"
     export_decoding_mlir(reduced_model, config, EXPORT_Decode_PATH)

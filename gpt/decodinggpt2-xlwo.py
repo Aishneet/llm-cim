@@ -17,9 +17,6 @@ CONTEXT_LENGTH = 4096
 # =====================================
 
 
-#####################################
-# Chapter 3
-#####################################
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
@@ -105,9 +102,6 @@ class MultiHeadAttention(nn.Module):
         self.ptr_current_pos = 0
 
 
-#####################################
-# Chapter 4
-#####################################
 class LayerNorm(nn.Module):
     def __init__(self, emb_dim):
         super().__init__()
@@ -278,7 +272,6 @@ def load_weights_from_hf(custom_model, name):
         "final_norm.shift": "transformer.ln_f.bias",
     }
 
-    # Extend positional embeddings 1024 -> 2048
     hf_pos = hf_state_dict["transformer.wpe.weight"]
     custom_pos = custom_state_dict["pos_emb.weight"]
     custom_pos[:hf_pos.shape[0]] = hf_pos
@@ -288,7 +281,6 @@ def load_weights_from_hf(custom_model, name):
         )
     custom_state_dict["pos_emb.weight"] = custom_pos
 
-    # LayerNorms only
     for i in range(len(custom_model.trf_blocks)):
         custom_base = f"trf_blocks.{i}"
         hf_base = f"transformer.h.{i}"

@@ -91,16 +91,6 @@ static memref_2d_i64 make_2d_i64(int64_t d0, int64_t d1) {
   return m;
 }
 
-/*
-  这就是你当前 lowered 后的入口函数。
-  4 个输入 memref，按你 IR 里的顺序写：
-    1) memref<1024x1024xf32>
-    2) memref<1x1x12x64xf32>
-    3) memref<1x1x12x64xf32>
-    4) memref<1x1xi64>
-  返回:
-    memref<1x1x50257xf32>
-*/
 extern memref_3d_f32 model_main(
     void *a0, void *a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5, int64_t a6,
     void *b0, void *b1, int64_t b2, int64_t b3, int64_t b4, int64_t b5, int64_t b6, int64_t b7, int64_t b8, int64_t b9, int64_t b10,
