@@ -1,0 +1,3 @@
+[submodule "gem5"]
+	path = gem5
+	url = https://github.com/Aishneet/gem5.git
