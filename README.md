@@ -18,13 +18,14 @@ The repository includes:
 The result analysis and visualization flow is maintained inside the MNSIM submodule, where the CiM simulation outputs are post-processed into plots and CSV files.
 
 ## Repository Structure
-
 ```text
 llm-cim/
-├── gem5/              # gem5 submodule
-├── MNSIM/             # MNSIM submodule
-├── gpt/               # GPT model scripts and workflow notes
-├── phi/               # Phi model scripts and workflow notes
+├── docs/
+│   └── mlir_workflow.md    # MLIR → LLVM → Binary workflow
+├── gem5/                   # gem5 submodule
+├── MNSIM/                  # MNSIM submodule
+├── gpt/                    # GPT-family model scripts
+├── phi/                    # Phi-family model scripts
 ├── .gitmodules
 └── README.md
 ```
@@ -43,6 +44,28 @@ git submodule update --init --recursive
 ```
 
 The exact simulator versions used in the experiments are pinned through the gem5 and MNSIM submodules.
+## Dependencies
+
+The model generation scripts rely on:
+
+- PyTorch
+- Hugging Face Transformers
+- Hugging Face Hub
+- Safetensors
+- Torch-MLIR
+
+Torch-MLIR installation instructions are available at:
+
+https://github.com/llvm/torch-mlir
+
+The compilation flow additionally requires:
+
+- mlir-opt
+- mlir-translate
+- llc
+- llvm-objcopy
+- clang
+
 
 ## Workflow
 
@@ -51,7 +74,9 @@ The exact simulator versions used in the experiments are pinned through the gem5
 3. Execute CPU-only workloads using gem5.
 4. Model CiM-accelerated GEMV execution using MNSIM.
 
-Detailed instructions are available in:
 
-- `gpt/README.md`
-- `phi/README.md`
+The complete MLIR compilation flow is documented in:
+
+```text
+docs/mlir_workflow.md
+```
