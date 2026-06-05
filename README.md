@@ -27,3 +27,31 @@ llm-cim/
 ├── phi/               # Phi model scripts and workflow notes
 ├── .gitmodules
 └── README.md
+```
+## Reproducibility
+
+Clone the repository together with all pinned dependencies:
+
+```bash
+git clone --recursive https://github.com/Aishneet/llm-cim.git
+```
+
+or initialize submodules after cloning:
+
+```bash
+git submodule update --init --recursive
+```
+
+The exact simulator versions used in the experiments are pinned through the gem5 and MNSIM submodules.
+
+## Workflow
+
+1. Generate MLIR from GPT or Phi models.
+2. Lower MLIR to LLVM IR and compile to x86 binaries.
+3. Execute CPU-only workloads using gem5.
+4. Model CiM-accelerated GEMV execution using MNSIM.
+
+Detailed instructions are available in:
+
+- `gpt/README.md`
+- `phi/README.md`
